@@ -20,6 +20,9 @@ use crate::clip::CachedClipPath;
 use crate::glyph::{CachedOutlineGlyph, CachedType3Glyph};
 use crate::mask::MaskKind;
 use crate::paint::{CachedShading, CachedShadingPattern, CachedTilingPattern};
+pub use color;
+use color::palette::css::WHITE;
+use color::{AlphaColor, Srgb};
 use hayro_interpret::font::Glyph;
 use hayro_interpret::hayro_syntax::page::Page;
 use hayro_interpret::util::{Float32Ext, PageExt};
@@ -46,7 +49,11 @@ pub(crate) mod paint;
 mod path;
 
 /// Convert the given page into an SVG string.
-pub fn convert(page: &Page<'_>, interpreter_settings: &InterpreterSettings) -> String {
+pub fn convert(
+    page: &Page<'_>,
+    interpreter_settings: &InterpreterSettings,
+    render_settings: &SvgRenderSettings,
+) -> String {
     let mut state = Context::new(
         page.initial_transform(true),
         Rect::new(
@@ -58,7 +65,7 @@ pub fn convert(page: &Page<'_>, interpreter_settings: &InterpreterSettings) -> S
         page.xref(),
         interpreter_settings.clone(),
     );
-    let mut device = SvgRenderer::new(page);
+    let mut device = SvgRenderer::new(page, render_settings.clone());
     device.write_header(page.render_dimensions());
 
     interpret_page(page, &mut state, &mut device);
@@ -66,7 +73,21 @@ pub fn convert(page: &Page<'_>, interpreter_settings: &InterpreterSettings) -> S
     device.finish()
 }
 
+/// Settings to apply during SVG rendering.
+#[derive(Debug, Clone)]
+pub struct SvgRenderSettings {
+    /// The background color. Determines the color of the generated SVG root element.
+    pub bg_color: AlphaColor<Srgb>,
+}
+
+impl Default for SvgRenderSettings {
+    fn default() -> Self {
+        Self { bg_color: WHITE }
+    }
+}
+
 pub(crate) struct SvgRenderer<'a> {
+    pub(crate) render_settings: SvgRenderSettings,
     pub(crate) xml: XmlWriter,
     pub(crate) outline_glyphs: Deduplicator<CachedOutlineGlyph>,
     pub(crate) type3_glyphs: Deduplicator<CachedType3Glyph<'a>>,
@@ -302,8 +323,9 @@ impl<'a> Device<'a> for SvgRenderer<'a> {
 }
 
 impl<'a> SvgRenderer<'a> {
-    pub(crate) fn new(page: &'a Page<'a>) -> Self {
+    pub(crate) fn new(page: &'a Page<'a>, render_settings: SvgRenderSettings) -> Self {
         Self {
+            render_settings: render_settings,
             xml: XmlWriter::new(Options::default()),
             outline_glyphs: Deduplicator::new('g'),
             type3_glyphs: Deduplicator::new('e'),
@@ -330,6 +352,14 @@ impl<'a> SvgRenderer<'a> {
             .write_attribute("xmlns", "http://www.w3.org/2000/svg");
         self.xml
             .write_attribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+        let bg_color = self.render_settings.bg_color.to_rgba8();
+        self.xml.write_attribute(
+            "style",
+            &format!(
+                "background-color: rgba({}, {}, {}, {});",
+                bg_color.r, bg_color.g, bg_color.b, bg_color.a
+            ),
+        );
     }
 
     // We need this because we have a small problem. `xmlwriter` doesn't allow us to write sub-streams
