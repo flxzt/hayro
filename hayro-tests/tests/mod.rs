@@ -5,7 +5,7 @@ use hayro_syntax::Pdf;
 use hayro_syntax::{DecryptionError, LoadPdfError};
 use image::{Rgba, RgbaImage, load_from_memory};
 use once_cell::sync::Lazy;
-use resvg::tiny_skia::{Color, Pixmap};
+use resvg::tiny_skia::Pixmap;
 use resvg::usvg::{Options, Transform, Tree};
 use sitro::{RenderOptions, Renderer};
 use std::cmp::max;
