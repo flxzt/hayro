@@ -20,9 +20,6 @@ use crate::clip::CachedClipPath;
 use crate::glyph::{CachedOutlineGlyph, CachedType3Glyph};
 use crate::mask::MaskKind;
 use crate::paint::{CachedShading, CachedShadingPattern, CachedTilingPattern};
-pub use color;
-use color::palette::css::WHITE;
-use color::{AlphaColor, Srgb};
 use hayro_interpret::font::Glyph;
 use hayro_interpret::hayro_syntax::page::Page;
 use hayro_interpret::util::{Float32Ext, PageExt};
@@ -76,13 +73,17 @@ pub fn convert(
 /// Settings to apply during SVG rendering.
 #[derive(Debug, Clone)]
 pub struct SvgRenderSettings {
-    /// The background color. Determines the color of the generated SVG root element.
-    pub bg_color: AlphaColor<Srgb>,
+    /// The background color in format [red, green, blue, alpha].
+    /// Determines the background color of the generated SVG root element.
+    pub bg_color: [u8; 4],
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for SvgRenderSettings {
     fn default() -> Self {
-        Self { bg_color: WHITE }
+        Self {
+            bg_color: [0, 0, 0, 0],
+        }
     }
 }
 
@@ -325,7 +326,7 @@ impl<'a> Device<'a> for SvgRenderer<'a> {
 impl<'a> SvgRenderer<'a> {
     pub(crate) fn new(page: &'a Page<'a>, render_settings: SvgRenderSettings) -> Self {
         Self {
-            render_settings: render_settings,
+            render_settings,
             xml: XmlWriter::new(Options::default()),
             outline_glyphs: Deduplicator::new('g'),
             type3_glyphs: Deduplicator::new('e'),
@@ -341,6 +342,8 @@ impl<'a> SvgRenderer<'a> {
     }
 
     pub(crate) fn write_header(&mut self, size: (f32, f32)) {
+        let bg_color = self.render_settings.bg_color;
+
         self.xml.start_element("svg");
         self.xml
             .write_attribute_fmt("viewBox", format_args!("0 0 {} {}", size.0, size.1));
@@ -352,14 +355,15 @@ impl<'a> SvgRenderer<'a> {
             .write_attribute("xmlns", "http://www.w3.org/2000/svg");
         self.xml
             .write_attribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
-        let bg_color = self.render_settings.bg_color.to_rgba8();
-        self.xml.write_attribute(
-            "style",
-            &format!(
-                "background-color: rgba({}, {}, {}, {});",
-                bg_color.r, bg_color.g, bg_color.b, bg_color.a
-            ),
-        );
+        if bg_color[3] > 0 {
+            self.xml.write_attribute(
+                "style",
+                &format!(
+                    "background-color: rgba({}, {}, {}, {});",
+                    bg_color[0], bg_color[1], bg_color[2], bg_color[3]
+                ),
+            );
+        }
     }
 
     // We need this because we have a small problem. `xmlwriter` doesn't allow us to write sub-streams
