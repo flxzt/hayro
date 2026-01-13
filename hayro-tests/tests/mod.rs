@@ -180,7 +180,9 @@ fn interpreter_settings() -> InterpreterSettings {
 }
 
 fn svg_render_settings() -> SvgRenderSettings {
-    SvgRenderSettings::default()
+    SvgRenderSettings {
+        bg_color: [255, 255, 255, 255],
+    }
 }
 
 pub fn run_render_test(name: &str, file_path: &str, range_str: Option<&str>) {
@@ -260,7 +262,6 @@ fn render_svg(
                 tree.size().height().ceil() as u32,
             )
             .unwrap();
-            pixmap.fill(Color::WHITE);
             resvg::render(&tree, Transform::default(), &mut pixmap.as_mut());
             Some(pixmap.encode_png().unwrap())
         })
